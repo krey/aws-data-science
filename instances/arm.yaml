@@ -1,0 +1,30 @@
+# Arm Ubuntu Server 20.04 LTS
+ImageId: "ami-08e6b682a466887dd"
+KeyName: "MyKeyPair"
+InstanceType: "t4g.2xlarge" # 8 vCPU
+# InstanceType: "c6g.4xlarge" # 16 vCPU
+BlockDeviceMappings:
+# Main working partition
+- DeviceName: "/dev/sda1"
+  Ebs:
+    DeleteOnTermination: true
+    Encrypted: true
+    VolumeType: "gp3"
+    VolumeSize: 40
+# Swap parition
+#- DeviceName: "/dev/sda2"
+#  Ebs:
+#    DeleteOnTermination: true
+#    Encrypted: true
+#    VolumeType: "gp3"
+#    VolumeSize: 2
+
+
+#HibernationOptions:
+#  Configured: true
+TagSpecifications:
+- ResourceType: "instance"
+  Tags:
+  - Key: "name"
+    Value: "arm"
+

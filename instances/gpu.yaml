@@ -1,0 +1,30 @@
+# Deep Learning Base AMI (Ubuntu 18.04) Version 41.0
+# it already has CUDA set up, but image is 60GB for some reason
+ImageId: "ami-0d36a4e11caa2b26f" 
+KeyName: "MyKeyPair"
+InstanceType: "g4dn.xlarge"
+BlockDeviceMappings:
+# Main working partition
+- DeviceName: "/dev/sda1"
+  Ebs:
+    DeleteOnTermination: true
+    Encrypted: true
+    VolumeType: "gp3"
+    VolumeSize: 70
+# Swap parition
+#- DeviceName: "/dev/sda2"
+#  Ebs:
+#    DeleteOnTermination: true
+#    Encrypted: true
+#    VolumeType: "gp3"
+#    VolumeSize: 2
+
+
+#HibernationOptions:
+#  Configured: true
+TagSpecifications:
+- ResourceType: "instance"
+  Tags:
+  - Key: "name"
+    Value: "gpu"
+

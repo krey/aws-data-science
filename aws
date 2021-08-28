@@ -1,0 +1,110 @@
+#!/bin/bash
+AWS_DIR="$HOME/Projects/AWS"
+INSTANCE_DIR="$AWS_DIR/instances"
+MOUNT_DIR_DIR="$AWS_DIR/mount"
+SETUP_DIR="$AWS_DIR/setup"
+KEYFILE="$AWS_DIR/MyKeyPair.pem"
+MODE="$1"
+TAG="$2"
+shift
+shift
+FILE=$(mktemp)
+MOUNT_DIR="$MOUNT_DIR_DIR/$TAG"
+INSTANCE_FILE="$INSTANCE_DIR/$TAG.yaml"
+
+find_running() {
+    # sets $FILE
+    aws ec2 describe-instances --filters Name=instance-state-name,Values=running "Name=tag:name,Values=$TAG" --query "Reservations[*].Instances[*].[PublicDnsName]" --output text | tee $FILE > /dev/null
+}
+
+start_instance() {
+    # sets $STOPPED and $RUNNING
+    # $RUNNING is IP, $STOPPED is instance-id
+    find_running
+    if [[ $(wc -l < "$FILE") = 0 ]] 
+    then
+        echo "No running $TAG instance found"
+        STOPPED=$(aws ec2 describe-instances --filters Name=instance-state-name,Values=stopped "Name=tag:name,Values=$TAG" --query "Reservations[*].Instances[*].[InstanceId]" --output text | head -n 1)
+        if [ -z $STOPPED ]
+        then
+            echo "No stopped $TAG instance found"
+            exit 1
+        fi
+        echo "Found stopped $TAG instance $STOPPED"
+        aws ec2 start-instances --instance-ids $STOPPED > /dev/null
+        while [[ $(wc -l < "$FILE") = 0 ]]; do
+            echo "Waiting for $TAG instance $STOPPED to start..."
+            sleep 5
+            find_running
+        done
+    fi
+    RUNNING=$(head -n 1 "$FILE")
+}
+
+create() {
+    EXISTS=$(aws ec2 describe-instances --filters Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped "Name=tag:name,Values=$TAG" --query "Reservations[*].Instances[*].[InstanceId]" --output text | wc -l)
+    if [[ $EXISTS > 0 ]]
+    then
+        echo "Instance with tag \"$TAG\" already exists."
+    else
+        echo "Creating new \"$TAG\" instance"
+        aws ec2 run-instances --cli-input-yaml file:///$INSTANCE_FILE
+    fi
+}
+
+setup() {
+    start_instance
+    scp -r -i $KEYFILE -o StrictHostKeyChecking=no $SETUP_DIR ubuntu@$RUNNING:/home/ubuntu
+    ssh -T -i $KEYFILE -o StrictHostKeyChecking=no ubuntu@$RUNNING << EOF
+    chmod +x ~/setup/*.sh
+    cp ~/setup/{startup,jupyter-startup}.sh ~/
+    ~/setup/setup.sh
+    rm -r ~/setup
+EOF
+}
+
+connect() {
+    start_instance
+    rm "$FILE"
+    echo "Connecting \"$TAG\" instance $STOPPED at $RUNNING"
+    echo "Forwarded port: 8889"
+    ssh -i $KEYFILE -o StrictHostKeyChecking=no ubuntu@$RUNNING -L localhost:8889:localhost:8889
+}
+
+mount() {
+    start_instance
+    rm "$FILE"
+    echo "Mounting \"$TAG\" instance $STOPPED at $RUNNING"
+    echo "Mount point: $MOUNT_DIR"
+    mkdir -p $MOUNT_DIR
+    sshfs ubuntu@$RUNNING:/home/ubuntu $MOUNT_DIR -o IdentityFile=$KEYFILE -o StrictHostKeyChecking=no
+}
+
+umount() {
+    fusermount -u $MOUNT_DIR
+}
+
+show() {
+    aws ec2 describe-instances --filters Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped --query "Reservations[*].Instances[*].{___name: Tags[?Key=='name']|[0].Value, __status:State.Name, _instance:InstanceId, dns: PublicDnsName}" --output table
+}
+
+if [[ "$MODE" == "create" ]]
+then
+    create
+elif [[ "$MODE" == "connect" ]]
+then
+    connect
+elif [[ "$MODE" == "mount" ]]
+then
+    mount
+elif [[ "$MODE" == "umount" ]]
+then
+    umount
+elif [[ "$MODE" == "setup" ]]
+then
+    setup
+elif [[ "$MODE" == "show" ]]
+then
+    show
+fi
+

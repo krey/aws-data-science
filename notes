@@ -1,0 +1,13 @@
+HOW TO CREATE A KEY
+
+aws ec2 create-key-pair --key-name MyKeyPair --query 'KeyMaterial' --output text > MyKeyPair.pem   
+chmod 400 MyKeyPair.pem
+
+HOW TO ENABLE HIBERNATION
+
+sudo swapon /swap-hibinit
+echo "/swap-hibinit none swap defaults 0 0" | sudo tee -a /etc/fstab
+# https://stackoverflow.com/questions/36853711/add-a-kernel-parameter-with-sed-to-grub/68026463#68026463
+sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="/&nokaslr /' /etc/default/grub.d/50-cloudimg-settings.cfg
+
+reboot?
